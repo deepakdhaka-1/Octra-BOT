@@ -1,0 +1,2 @@
+walletaddressofprivatekey1
+walletaddressofprivatekey2
