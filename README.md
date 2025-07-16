@@ -29,11 +29,38 @@
 ├───main.py # Main tool
 └──claim.py # 2nd Main tool    # Execute Claim and decrypt from record.txt
 ```
+## `main.py`
+### 1️⃣ Send Tx
+- 🧾 Prompt: `Recipient Address` + `Amount`  
+- 🚀 Executes a transaction from **all wallets**, dropping the random amount between minimum and maximum amount provided.
 
-## Usage
-==== OCTRA MULTI-WALLET TOOL ====
-[1] Send tx
-[2] Balance
-[3] Multi Send
-[4] Encrypt + Private Transfer + Decrypt
-[5] Exit
+---
+
+### 2️⃣ Balance
+- 📡 Fetches and displays the **real-time balance** of each wallet  
+- ✅ Uses `GET /balance/{address}` RPC endpoint
+
+---
+
+### 3️⃣ Multi Send
+- ⚙️ Prompt: `Min Amount`, `Max Amount`, `Delay Between`  
+- 🔁 Sends **random amounts** from each wallet to a **random order of other wallets**  
+- 📦 Respects balance and nonce tracking
+
+---
+
+### 4️⃣ Encrypt + Private Transfer + Decrypt
+- 🔐 Prompts for:  
+  - Amount to Encrypt  
+  - Amount to Private Transfer  
+  - Amount to Decrypt  
+- ⚙️ Executes in order:  
+  `Encrypt ➝ 120s ➝ Private Transfer ➝ 120s ➝ Decrypt ➝ 120s`  
+- 📁 Logs all private transfer TXs into `record.txt`
+
+## `claim.py` – Passive Claimer
+- 🔍 Checks for pending private transfers  
+- ✅ Automatically claims them  
+- 🔓 Immediately decrypts the transferred balance  
+- 🔁 Runs across all wallets in `address.txt` + `accounts.txt`
+
