@@ -282,32 +282,35 @@ async def wait_for_nonce_update(account, initial_nonce, timeout=120):
     return False
 
 async def send_tx_all_wallets(min_amount, max_amount):
+    recipient = input(f"{Colors.BOLD}Enter recipient wallet address: {Colors.END}").strip()
+    if not b58.match(recipient):
+        print(f"{Colors.RED}Invalid recipient address format{Colors.END}")
+        return
+
     for idx, account in enumerate(accounts):
         print(f"\n{Colors.BOLD}Processing Wallet {idx+1}: {account['addr'][:12]}...{Colors.END}")
         nonce, balance = await get_balance_and_nonce(account)
         if balance is None:
             print(f"  {Colors.RED}Failed to fetch balance{Colors.END}")
             continue
-            
+
         print(f"  {Colors.CYAN}Balance: {balance:.6f} OCT, Nonce: {nonce}{Colors.END}")
-        
-        for recipient in addresses:
-            amount = random.uniform(min_amount, max_amount)
-            fee = 0.001 if amount < 1000 else 0.003
-            if balance < amount + fee:
-                print(f"  {Colors.YELLOW}Insufficient balance for {recipient[:12]}... (needed: {amount+fee:.6f}){Colors.END}")
-                continue
-                
-            print(f"  {Colors.BLUE}Sending {amount:.6f} OCT to {recipient[:12]}...{Colors.END}")
-            success, tx_hash = await send_transaction(account, recipient, amount)
-            if success:
-                print(f"  {Colors.GREEN}Success! TX Hash: {tx_hash}{Colors.END}")
-                print(f"  {Colors.CYAN}Explorer: {OCTRASCAN_URL}{tx_hash}{Colors.END}")
-                balance -= (amount + fee)
-                # Update nonce after successful transaction
-                await wait_for_nonce_update(account, nonce)
-            else:
-                print(f"  {Colors.RED}Failed: {tx_hash}{Colors.END}")
+
+        amount = random.uniform(min_amount, max_amount)
+        fee = 0.001 if amount < 1000 else 0.003
+        if balance < amount + fee:
+            print(f"  {Colors.YELLOW}Insufficient balance (needed: {amount+fee:.6f}){Colors.END}")
+            continue
+
+        print(f"  {Colors.BLUE}Sending {amount:.6f} OCT to {recipient[:12]}...{Colors.END}")
+        success, tx_hash = await send_transaction(account, recipient, amount)
+        if success:
+            print(f"  {Colors.GREEN}Success! TX Hash: {tx_hash}{Colors.END}")
+            print(f"  {Colors.CYAN}Explorer: {OCTRASCAN_URL}{tx_hash}{Colors.END}")
+            balance -= (amount + fee)
+            await wait_for_nonce_update(account, nonce)
+        else:
+            print(f"  {Colors.RED}Failed: {tx_hash}{Colors.END}")
 
 async def multi_send(min_amount, max_amount, min_delay, max_delay):
     for idx, account in enumerate(accounts):
@@ -432,7 +435,7 @@ async def main_menu():
     
     while True:
         print(f"\n{Colors.HEADER}{'==== OCTRA MULTI-WALLET TOOL ====':^60}{Colors.END}")
-        print(f"{Colors.BOLD}[1]{Colors.END} Send tx to all addresses")
+        print(f"{Colors.BOLD}[1]{Colors.END} Send tx from all addresses")
         print(f"{Colors.BOLD}[2]{Colors.END} Show balances")
         print(f"{Colors.BOLD}[3]{Colors.END} Multi-send with delays")
         print(f"{Colors.BOLD}[4]{Colors.END} Encrypt + Private Transfer + Decrypt")
