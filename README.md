@@ -64,3 +64,18 @@
 - 🔓 Immediately decrypts the transferred balance  
 - 🔁 Runs across all wallets in `address.txt` + `accounts.txt`
 
+## Main Commands ~
+```
+git clone https://github.com/deepakdhaka-1/Octra-BOT
+cd Octra-BOT
+```
+```
+pip install -r requirements.txt
+```
+## Add credentials in `accounts.txt` and `address.txt`
+```
+python3 main.py
+```
+Once Done then run ~
+```
+python3 claim.py
