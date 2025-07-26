@@ -79,3 +79,6 @@ python3 main.py
 Once Done then run ~
 ```
 python3 claim.py
+```
+During Claim Decryption will be failed , that is not any issue. As we already done the decryption.
+Important thing is our interaction is getting counted.
