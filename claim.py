@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import json, base64, hashlib, os, sys, asyncio, aiohttp
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from nacl.signing import SigningKey
+from nacl.signing import SigningKey, VerifyKey
 
 μ = 1_000_000
 RPC_URL = "https://octra.network"
@@ -37,6 +37,19 @@ def decrypt_amount(encrypted_data_b64, shared_key):
     except:
         return None
 
+def derive_encryption_key(privkey_b64):
+    privkey_bytes = base64.b64decode(privkey_b64)
+    salt = b"octra_encrypted_balance_v2"
+    return hashlib.sha256(salt + privkey_bytes).digest()[:32]
+
+def encrypt_client_balance(balance, privkey_b64):
+    key = derive_encryption_key(privkey_b64)
+    aesgcm = AESGCM(key)
+    nonce = os.urandom(12)
+    plaintext = str(balance).encode()
+    ciphertext = aesgcm.encrypt(nonce, plaintext, None)
+    return "v2|" + base64.b64encode(nonce + ciphertext).decode()
+
 async def get_pending_transfers(session, addr, priv):
     headers = {"X-Private-Key": priv}
     try:
@@ -62,6 +75,28 @@ async def claim_transfer(session, addr, priv, transfer_id):
     async with session.post(f"{RPC_URL}/claim_private_transfer", json=payload, headers=headers) as res:
         return res.status == 200
 
+async def get_encrypted_balance_raw(session, addr, priv):
+    headers = {"X-Private-Key": priv}
+    try:
+        async with session.get(f"{RPC_URL}/view_encrypted_balance/{addr}", headers=headers) as res:
+            data = await res.json()
+            return int(data.get("encrypted_balance_raw", 0))
+    except:
+        return 0
+
+async def decrypt_balance(session, addr, priv, raw_amt):
+    encrypted_raw = await get_encrypted_balance_raw(session, addr, priv)
+    new_raw = encrypted_raw - raw_amt
+    encrypted_data = encrypt_client_balance(new_raw, priv)
+    payload = {
+        "address": addr,
+        "amount": str(raw_amt),
+        "private_key": priv,
+        "encrypted_data": encrypted_data
+    }
+    async with session.post(f"{RPC_URL}/decrypt_balance", json=payload) as res:
+        return res.status == 200
+
 def log_claim_result(line: str):
     with open(LOG_FILE, "a") as f:
         f.write(line + "\n")
@@ -76,6 +111,7 @@ async def process_wallet(session, idx, addr, priv):
         log_claim_result(msg)
         return
 
+    total_decrypt_amount = 0.0
     for tx in transfers:
         tid = tx.get("id")
         eph_key = tx.get("ephemeral_key")
@@ -86,14 +122,30 @@ async def process_wallet(session, idx, addr, priv):
         shared_key = derive_decryption_key(priv, eph_key)
         actual_amt = decrypt_amount(enc_data, shared_key)
 
+        if actual_amt is None:
+            print(f"{Colors.RED}✖ Failed to decrypt amount from TX {tid}{Colors.END}")
+            continue
+
         ok = await claim_transfer(session, addr, priv, tid)
         if ok:
+            total_decrypt_amount += actual_amt
             msg = f"{Colors.GREEN}✔ Claimed ID: {tid} ({actual_amt:.6f} OCT){Colors.END}"
             log_claim_result(f"{addr[:12]} | Claimed {actual_amt:.6f} OCT")
         else:
             msg = f"{Colors.RED}✖ Claim failed ID: {tid}{Colors.END}"
         print(" ", msg)
-        await asyncio.sleep(150)  # delay between each transfer claim
+        await asyncio.sleep(2)
+
+    if total_decrypt_amount > 0:
+        raw_amt = int(total_decrypt_amount * μ)
+        success = await decrypt_balance(session, addr, priv, raw_amt)
+        if success:
+            msg = f"{Colors.GREEN}✅ Decrypted {total_decrypt_amount:.6f} OCT for {addr[:12]}{Colors.END}"
+        else:
+            msg = f"{Colors.RED}❌ Decryption failed for {addr[:12]}{Colors.END}"
+        print(msg)
+        log_claim_result(msg)
+        await asyncio.sleep(2)
 
 async def main():
     try:
@@ -111,10 +163,8 @@ async def main():
     open(LOG_FILE, "w").close()
 
     async with aiohttp.ClientSession() as session:
-        for i in range(len(addresses)):
-            await process_wallet(session, i+1, addresses[i], privkeys[i])
-            await asyncio.sleep(60)  # 1 minute delay between wallets
+        for i in range(1, len(addresses)):
+            await process_wallet(session, i, addresses[i], privkeys[i])
 
 if __name__ == "__main__":
     asyncio.run(main())
-
